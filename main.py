@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean 
 from sqlalchemy.orm import sessionmaker, declarative_base, Session 
 from passlib.context import CryptContext
+from datetime import datetime, timedelta
+from jose import jwt
 
 app = FastAPI()
 
@@ -10,6 +12,9 @@ DATABASE_URL = "sqlite:///./tasks.db"
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = "your-secret-key-change-this-later"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Task(BaseModel): 
@@ -35,6 +40,15 @@ class UserDB(Base):
 
 def hash_password(password: str):
     return pwd_context.hash(password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_password(plain_password: str, hashed_password: str):
+    return pwd_context.verify(plain_password, hashed_password)
 
 def get_db(): 
     db =  SessionLocal()
@@ -86,3 +100,13 @@ def register(user: User, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return {"message": "User registered successfully"}
 
+
+@app.post("/login")
+def login(user: User, db: Session = Depends(get_db)): 
+    db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
+    if db_user is None: 
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    if not verify_password(user.password, db_user.hashed_password): 
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_access_token({"sub": user.username})
+    return {"access_token": token, "token_type": "bearer"}
