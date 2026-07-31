@@ -2,12 +2,14 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel 
 from sqlalchemy import create_engine, Column, Integer, String, Boolean 
 from sqlalchemy.orm import sessionmaker, declarative_base, Session 
+from passlib.context import CryptContext
 
 app = FastAPI()
 
 DATABASE_URL = "sqlite:///./tasks.db"
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Task(BaseModel): 
@@ -20,6 +22,19 @@ class TaskDB(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String)
     completed = Column(Boolean, default=False)
+
+class User(BaseModel):
+    username: str
+    password: str
+
+class UserDB(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True)
+    hashed_password = Column(String)
+
+def hash_password(password: str):
+    return pwd_context.hash(password)
 
 def get_db(): 
     db =  SessionLocal()
@@ -61,3 +76,13 @@ def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db))
     db.commit()
     db.refresh(task)
     return task
+
+@app.post("/register")
+def register(user: User, db: Session = Depends(get_db)): 
+    hashed = hash_password(user.password)
+    new_user = UserDB(username=user.username, hashed_password=hashed)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User registered successfully"}
+
