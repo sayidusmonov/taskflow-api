@@ -29,6 +29,7 @@ class TaskDB(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String)
     completed = Column(Boolean, default=False)
+    owner_id = Column(String)
 
 class User(BaseModel):
     username: str
@@ -76,11 +77,11 @@ Base.metadata.create_all(bind=engine)
 
 @app.get("/tasks")
 def get_tasks(db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
-    return db.query(TaskDB).all()
+    return db.query(TaskDB).filter(TaskDB.owner == current_user.username).all()
 
 @app.post("/tasks")
 def create_task(task: Task, db:  Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
-    new_task = TaskDB(id=task.id, title= task.title, completed=task.completed)
+    new_task = TaskDB(id=task.id, title= task.title, completed=task.completed, owner=current_user.username)
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
@@ -88,7 +89,7 @@ def create_task(task: Task, db:  Session = Depends(get_db), current_user: UserDB
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
-    task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
+    task = db.query(TaskDB).filter(TaskDB.id == task_id, TaskDB.owner == current_user.username).first()
     if task is None: 
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(task)
@@ -97,7 +98,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserD
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
-    task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
+    task = db.query(TaskDB).filter(TaskDB.id == task_id, TaskDB.owner == current_user.username).first()
     if task is None: 
         raise HTTPException(status_code=404, detail="Task not found")
     task.title = updated_task.title 
