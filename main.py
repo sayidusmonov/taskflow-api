@@ -5,8 +5,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 app = FastAPI()
+security = HTTPBearer()
 
 DATABASE_URL = "sqlite:///./tasks.db"
 engine = create_engine(DATABASE_URL)
@@ -57,14 +59,27 @@ def get_db():
     finally: 
         db.close()
 
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user = db.query(UserDB).filter(UserDB.username == username).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 Base.metadata.create_all(bind=engine)
 
 @app.get("/tasks")
-def get_tasks(db: Session = Depends(get_db)): 
+def get_tasks(db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     return db.query(TaskDB).all()
 
 @app.post("/tasks")
-def create_task(task: Task, db:  Session = Depends(get_db)): 
+def create_task(task: Task, db:  Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     new_task = TaskDB(id=task.id, title= task.title, completed=task.completed)
     db.add(new_task)
     db.commit()
@@ -72,7 +87,7 @@ def create_task(task: Task, db:  Session = Depends(get_db)):
     return new_task
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int, db: Session = Depends(get_db)): 
+def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
     task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
     if task is None: 
         raise HTTPException(status_code=404, detail="Task not found")
@@ -81,7 +96,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     return{"message": f"Task{task_id} deleted"}
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db)): 
+def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
     task = db.query(TaskDB).filter(TaskDB.id == task_id).first()
     if task is None: 
         raise HTTPException(status_code=404, detail="Task not found")
@@ -92,7 +107,7 @@ def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db))
     return task
 
 @app.post("/register")
-def register(user: User, db: Session = Depends(get_db)): 
+def register(user: User, db: Session = Depends(get_db)):
     hashed = hash_password(user.password)
     new_user = UserDB(username=user.username, hashed_password=hashed)
     db.add(new_user)
@@ -102,7 +117,7 @@ def register(user: User, db: Session = Depends(get_db)):
 
 
 @app.post("/login")
-def login(user: User, db: Session = Depends(get_db)): 
+def login(user: User, db: Session = Depends(get_db)):
     db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
     if db_user is None: 
         raise HTTPException(status_code=401, detail="Invalid username or password")
