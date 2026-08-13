@@ -29,7 +29,7 @@ class TaskDB(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String)
     completed = Column(Boolean, default=False)
-    owner_id = Column(String)
+    owner = Column(String)
 
 class User(BaseModel):
     username: str
