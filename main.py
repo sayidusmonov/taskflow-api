@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends 
 from pydantic import BaseModel 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean 
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base, Session 
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -30,6 +30,7 @@ class TaskDB(Base):
     title = Column(String)
     completed = Column(Boolean, default=False)
     owner = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class User(BaseModel):
     username: str
