@@ -32,6 +32,17 @@ class TaskDB(Base):
     owner = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Habit(BaseModel): 
+    name: str
+
+class HabitDB(Base): 
+    __tablename__ = "habits"
+    id = Column(Integer, primary_key=True) 
+    name = Column(String)
+    owner = Column(String)
+    current_streak = Column(Integer, default=0)
+    last_completed = Column(String, default=None, nullable=True)
+
 class User(BaseModel):
     username: str
     password: str
@@ -80,6 +91,10 @@ Base.metadata.create_all(bind=engine)
 def get_tasks(db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     return db.query(TaskDB).filter(TaskDB.owner == current_user.username).all()
 
+@app.get("/habits")
+def get_habits(db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
+    return db.query(HabitDB).filter(HabitDB.owner == current_user.username).all()
+
 @app.post("/tasks")
 def create_task(task: Task, db:  Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
     new_task = TaskDB(id=task.id, title= task.title, completed=task.completed, owner=current_user.username)
@@ -87,6 +102,14 @@ def create_task(task: Task, db:  Session = Depends(get_db), current_user: UserDB
     db.commit()
     db.refresh(new_task)
     return new_task
+
+@app.post("/habits")
+def create_habit(habit: Habit, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
+    new_habit =HabitDB(name=habit.name, owner=current_user.username, current_streak=0, last_completed=None)
+    db.add(new_habit)
+    db.commit()
+    db.refresh(new_habit)
+    return new_habit
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
