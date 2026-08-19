@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base, Session 
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from jose import jwt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -110,6 +110,28 @@ def create_habit(habit: Habit, db: Session = Depends(get_db), current_user: User
     db.commit()
     db.refresh(new_habit)
     return new_habit
+
+@app.post("/habits/{habit_id}/complete")
+def complete_habit(habit_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
+    habit = db.query(HabitDB).filter(HabitDB.id == habit_id, HabitDB.owner == current_user.username).first()
+    if habit is None:
+        raise HTTPException(status_code=404, detail="Habit not found")
+
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    if habit.last_completed == today:
+        return {"message": "Already completed today", "current_streak": habit.current_streak}
+
+    if habit.last_completed == yesterday:
+        habit.current_streak += 1
+    else:
+        habit.current_streak = 1
+
+    habit.last_completed = today
+    db.commit()
+    db.refresh(habit)
+    return habit
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
