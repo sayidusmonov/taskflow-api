@@ -142,6 +142,15 @@ def delete_task(task_id: int, db: Session = Depends(get_db), current_user: UserD
     db.commit()
     return{"message": f"Task{task_id} deleted"}
 
+@app.delete("/habits/{habit_id}")
+def delete_habit(habit_id: int, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)):
+    habit = db.query(HabitDB).filter(HabitDB.id == habit_id, HabitDB.owner == current_user.username).first()
+    if habit is None:
+        raise HTTPException(status_code=404, detail="Habit not found")
+    db.delete(habit)
+    db.commit()
+    return {"message": f"Habit {habit_id} deleted"}
+
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, updated_task: Task, db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_user)): 
     task = db.query(TaskDB).filter(TaskDB.id == task_id, TaskDB.owner == current_user.username).first()
